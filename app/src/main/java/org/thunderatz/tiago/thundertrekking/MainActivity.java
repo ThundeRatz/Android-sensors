@@ -1,19 +1,14 @@
 package org.thunderatz.tiago.thundertrekking;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.hardware.Camera;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-/*
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureRequest;
-*/
+
 import android.location.Criteria;
 import android.location.GpsSatellite;
 import android.location.GpsStatus;
@@ -28,6 +23,20 @@ import android.text.method.ScrollingMovementMethod;
 import android.view.KeyEvent;
 import android.widget.TextView;
 
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfRect;
+import org.opencv.core.Rect;
+import org.opencv.core.Size;
+import org.opencv.objdetect.CascadeClassifier;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.NetworkInterface;
 import java.net.InetAddress;
 import java.net.SocketException;
@@ -37,45 +46,24 @@ import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 
-public class MainActivity extends Activity implements SensorEventListener, LocationListener, GpsStatus.Listener {
+public class MainActivity extends Activity implements SensorEventListener, LocationListener, GpsStatus.Listener,
+        CameraBridgeViewBase.CvCameraViewListener2 {
 
-    private static final float low_pass_alpha = 0.85f;
     private TextView log;
     private SensorManager mSensorManager;
     private float[] gravity = new float[] {0.f, 0.f, 0.f};
     private SensorThread gps;
     private SensorThread compass;
     private SensorThread proximity;
-    private TorchServer torch;
     private SensorEventListener sensor_listener;
-    private LocationListener gps_listener = this;
     private LocationManager locationManager;
     private int satelites_ultimo = -1, satelites_usados_ultimo = -1;
     private boolean gps_ativado = false;
-    /*
-    private static CameraDevice cameraDevice;
-    private static CaptureRequest.Builder cameraBuilder;
 
-    private final CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
-        @Override
-        public void onOpened(CameraDevice d) {
-            cameraDevice = d;
-            log.append("Câmera conectada\n");
-        }
-        @Override
-        public void onDisconnected(CameraDevice d) {
-            d.close();
-            cameraDevice = null;
-            log.append("Câmera desconectada\n");
-        }
-        @Override
-        public void onError(CameraDevice d, int error) {
-            d.close();
-            cameraDevice = null;
-            log.append("Camera: erro " + Integer.toString(error) + "\n");
-        }
-    };
-    */
+    private Mat frameGray, frameRGBA;
+    private CascadeClassifier cascadeDetector;
+    private CameraBridgeViewBase mOpenCvCameraView;
+
     Logger logger = new Logger() {
         @Override
         public void add(final String msg) {
@@ -88,6 +76,51 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         }
     };
 
+    private BaseLoaderCallback loaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS:
+                {
+                    log.append("BaseLoaderCallback -> onManagerConnected\n");
+                    try {
+                        File mCascadeFile;
+                        // load cascade file from application resources
+                        InputStream is = getResources().openRawResource(R.raw.lbpcascade_cone);
+                        File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
+                        mCascadeFile = new File(cascadeDir, "lbpcascade_cone.xml");
+                        FileOutputStream os = new FileOutputStream(mCascadeFile);
+
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        while ((bytesRead = is.read(buffer)) != -1) {
+                            os.write(buffer, 0, bytesRead);
+                        }
+                        is.close();
+                        os.close();
+
+                        cascadeDetector = new CascadeClassifier(mCascadeFile.getAbsolutePath());
+                        if (cascadeDetector.empty())
+                            cascadeDetector = null;
+
+                        cascadeDir.delete();
+
+                    } catch (IOException e) {
+                        log.append(e.toString());
+                        e.printStackTrace();
+                    }
+
+                    mOpenCvCameraView.enableView();
+                } break;
+                default:
+                {
+                    log.append("Unhandled BaseLoaderCallback -> onManagerConnected\n");
+                    super.onManagerConnected(status);
+                } break;
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         PackageManager pm;
@@ -97,7 +130,6 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         setContentView(R.layout.activity_main);
 
         sensor_listener = this;
-        gps_listener = this;
 
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         locationManager.addGpsStatusListener(this);
@@ -229,10 +261,6 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         });
 
         pm = getPackageManager();
-        if (pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)) {
-            torch = new TorchServer(logger, 1417, "TorchServer");
-        } else
-            log.append("Sem FEATURE_CAMERA_FLASH\n");
         if (pm.queryIntentActivities(new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH), 0).size() > 0) {
 
         } else
@@ -243,30 +271,22 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         wakeLock.acquire();
         */
         //  wakelock.release() quando não houver ninguém conectado
+
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.fd_activity_surface_view);
+        mOpenCvCameraView.setCvCameraViewListener(this);
+        log.append("mOpenCvCameraView.setCvCameraViewListener(this) ok\n");
     }
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        //if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)) {
-            /*
-            // Ver exemplos:
-            // https://github.com/googlesamples/android-Camera2Basic/blob/master/Application/src/main/java/com/example/android/camera2basic/Camera2BasicFragment.java
-            // http://blog.csdn.net/torvalbill/article/details/40376145
-            String cameraId;
-            CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-            for (cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-
-                if (characteristics.get(CameraCharacteristics.LENS_FACING) != CameraCharacteristics.LENS_FACING_FRONT)
-                    break;
-            }
-            log.append("Abrindo câmera " + cameraId + "\n");
-            manager.openCamera(cameraId, mStateCallback, null);
-            */
-            //cameraBuilder.set(SCALER_CROP_REGION, TORCH);
-        //}
+        if (!OpenCVLoader.initDebug())
+            // local library
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_0_0, this, loaderCallback);
+        else
+            // system library
+            loaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
     }
 
     @Override
@@ -275,12 +295,8 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         // Parar de receber leituras de sensores para economizar bateria
         /* mSensorManager.unregisterListener(this); */
         // Parar câmera
-        /*
-        if (cameraDevice != null) {
-            cameraDevice.close();
-            cameraDevice = null;
-        }
-        */
+        if (mOpenCvCameraView != null)
+            mOpenCvCameraView.disableView();
     }
 
     @Override
@@ -288,7 +304,35 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         gps.close();
         compass.close();
         proximity.close();
-        torch.close();
+        mOpenCvCameraView.disableView();
+    }
+
+    @Override
+    public void onCameraViewStarted(int width, int height) {
+        frameGray = new Mat();
+        frameRGBA = new Mat();
+    }
+
+    @Override
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+        if (cascadeDetector == null)
+            return null;
+
+        frameGray = inputFrame.gray();
+        MatOfRect hits = new MatOfRect();
+        cascadeDetector.detectMultiScale(frameGray, hits, 1.1, 2, 2,
+                new Size(100, 150), new Size());
+
+        Rect[] hitsArray = hits.toArray();
+        for (int i = 0; i < hitsArray.length; i++)
+            log.append(hitsArray[i].tl().toString() + hitsArray[i].br().toString());
+        return null;
+    }
+
+    @Override
+    public void onCameraViewStopped() {
+        frameGray.release();
+        frameRGBA.release();
     }
 
     @Override
@@ -459,17 +503,5 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
     @Override
     public void onAccuracyChanged(Sensor s, int accuracy) {
         log.append(s.getName() + ": acuracia " + Integer.toString(accuracy) + "\n");
-    }
-
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event)
-    {
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_VOLUME_UP:
-            case KeyEvent.KEYCODE_VOLUME_DOWN:
-            torch.invert();
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
     }
 }

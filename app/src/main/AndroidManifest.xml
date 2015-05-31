@@ -27,7 +27,7 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".activities.VisionCascade"
+        <activity android:name="VisionCascade"
             android:icon="@drawable/ic_launcher"
             android:label="@string/cascade"
             android:screenOrientation="landscape"

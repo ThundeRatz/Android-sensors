@@ -5,4 +5,4 @@
 .DS_Store
 /build
 /openCVLibrary300rc1/build
-app/src/main/res/raw/lbpcascade_cone.xml
+/app/src/main/res/raw/lbpcascade_cone.xml

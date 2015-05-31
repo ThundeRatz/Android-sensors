@@ -4,4 +4,5 @@
 /.idea/libraries
 .DS_Store
 /build
+/openCVLibrary300rc1/build
 app/src/main/res/raw/lbpcascade_cone.xml

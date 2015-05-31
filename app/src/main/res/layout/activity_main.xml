@@ -23,20 +23,19 @@
 
         </LinearLayout>
 
-        <TextView
+        <org.thunderatz.tiago.thundertrekking.views.ScrollingTextView
             android:id="@+id/log"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:maxLines = "200"
             android:scrollbars = "vertical"
-            android:gravity="bottom"
             android:textColor="#ff000000" />
 
     </FrameLayout>
 
     <org.opencv.android.JavaCameraView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_width="0px"
+        android:layout_height="0px"
         android:id="@+id/fd_activity_surface_view" />
 
 </FrameLayout>

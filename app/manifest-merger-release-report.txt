@@ -50,7 +50,7 @@ MERGED from com.android.support:support-v4:21.0.3:16:5
 		ADDED from AndroidManifest.xml:15:9
 	android:theme
 		ADDED from AndroidManifest.xml:17:9
-activity#org.thunderatz.tiago.thundertrekking.MainActivity
+activity#org.thunderatz.tiago.thundertrekking.activities.MainActivity
 ADDED from AndroidManifest.xml:18:9
 	android:screenOrientation
 		ADDED from AndroidManifest.xml:20:13

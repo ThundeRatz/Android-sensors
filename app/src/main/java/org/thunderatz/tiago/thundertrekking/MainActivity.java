@@ -15,8 +15,8 @@ import android.os.PowerManager;
 import android.text.method.ScrollingMovementMethod;
 import android.widget.TextView;
 
-import org.thunderatz.tiago.thundertrekking.sensor.Compass;
 import org.thunderatz.tiago.thundertrekking.sensor.GPS;
+import org.thunderatz.tiago.thundertrekking.sensor.IMU;
 import org.thunderatz.tiago.thundertrekking.sensor.Proximity;
 
 import java.net.NetworkInterface;
@@ -29,7 +29,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
     private TextView log;
     private SensorManager mSensorManager;
     private GPS gps;
-    private Compass compass;
+    private IMU imu;
     private Proximity proximity;
 
     Logger logger = new Logger() {
@@ -81,7 +81,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         listSensors();
 
         gps = new GPS(logger, 1414, "gps", this);
-        compass = new Compass(logger, 1415, "compass", this);
+        imu = new IMU(logger, 1415, "compass", this);
         proximity = new Proximity(logger, 1416, "proximity", this);
 
         PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
@@ -92,7 +92,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
     @Override
     protected void onDestroy() {
         gps.unregister();
-        compass.unregister();
+        imu.unregister();
         proximity.unregister();
     }
 
@@ -103,7 +103,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
             case Sensor.TYPE_ROTATION_VECTOR:
             case Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR:
             case Sensor.TYPE_MAGNETIC_FIELD: {
-                compass.send(event);
+                imu.send(event);
                 break;
             }
 

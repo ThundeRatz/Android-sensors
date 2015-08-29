@@ -11,21 +11,20 @@ import org.thunderatz.tiago.thundertrekking.Logger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-public class Compass extends SensorThread {
-    private static final float low_pass_alpha = 0.85f;
+public class IMU extends SensorThread {
+    private static final float LOW_PASS_ALPHA = 0.85f;
     private float[] gravity = new float[] {0.f, 0.f, 0.f};
     SensorManager mSensorManager;
     SensorEventListener activity;
 
-    public Compass(Logger l, int target_port, String my_id, Context context) {
+    public IMU(Logger l, int target_port, String my_id, Context context) {
         super(l, target_port, my_id);
         mSensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         activity = (SensorEventListener) context;
     }
 
     @Override
-     public boolean register() {
-        boolean acelerometro_necessario = false;
+    public boolean register() {
         // TYPE_ROTATION_VECTOR retorna rotação como mix do campo magnético e giroscópio
         // (usando campo magnético para leitura da rotação, mas calculando com giroscópio a rotação
         // entre as amostras do campo magnético e permitindo maior frequência de atualização que apenas
@@ -40,23 +39,21 @@ public class Compass extends SensorThread {
                 logger.add("Com TYPE_GEOMAGNETIC_ROTATION_VECTOR\n");
             } else {
                 logger.add("Sem TYPE_GEOMAGNETIC_ROTATION_VECTOR\n");
-                if (mSensorManager.registerListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), SensorManager.SENSOR_DELAY_FASTEST)) {
+                if (mSensorManager.registerListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), SensorManager.SENSOR_DELAY_FASTEST))
                     logger.add("Com TYPE_MAGNETIC_FIELD\n");
-                    acelerometro_necessario = true;
-                } else {
+                else
                     logger.add("Sem TYPE_MAGNETIC_FIELD\n");
-                }
             }
         }
 
-        if (acelerometro_necessario)
-            if (mSensorManager.registerListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL))
-                logger.add("Com TYPE_ACCELEROMETER\n");
-            else {
-                logger.add("Sem TYPE_ACCELEROMETER\n");
-                mSensorManager.unregisterListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD));
-                return false;
-            }
+        if (mSensorManager.registerListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_FASTEST))
+            logger.add("Com TYPE_ACCELEROMETER\n");
+        else {
+            logger.add("Sem TYPE_ACCELEROMETER\n");
+            mSensorManager.unregisterListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD));
+            return false;
+        }
+        // Seria interessante ter um celular com TYPE_GRAVITY, TYPE_GYROSCOPE e TYPE_LINEAR_ACCELERATION
         return true;
     }
 
@@ -73,9 +70,10 @@ public class Compass extends SensorThread {
             case Sensor.TYPE_ACCELEROMETER: {
                 // low-pass
                 for (int i = 0; i < 3; i++)
-                    gravity[i] = low_pass_alpha * gravity[i] + (1.f - low_pass_alpha) * event.values[i];
+                    gravity[i] = LOW_PASS_ALPHA * gravity[i] + (1.f - LOW_PASS_ALPHA) * event.values[i];
                 break;
             }
+
             case Sensor.TYPE_ROTATION_VECTOR:
             case Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR: {
                 // Isso nunca foi testado, não tenho celular com esses sensores.
@@ -92,8 +90,9 @@ public class Compass extends SensorThread {
                     buffer.putFloat(value);
                 }
                 send(buffer.array());
-                break;
+                break;]
             }
+
             case Sensor.TYPE_MAGNETIC_FIELD: {
                 float[] rotacao = new float[9], inclinacao = new float[9], orientacao_celular = new float[3];
                 // getRotationMatrix retorna false se houver erro (matriz nula, por exemplo, em

@@ -1,5 +1,8 @@
 package org.thunderatz.tiago.thundertrekking.sensor;
 
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+
 import org.thunderatz.tiago.thundertrekking.Logger;
 
 import java.io.IOException;
@@ -89,6 +92,10 @@ public abstract class SensorThread extends Thread {
                 }
             }
         }).start();
+    }
+
+    protected void registerListener(int sensor) {
+
     }
 
     public abstract boolean register();

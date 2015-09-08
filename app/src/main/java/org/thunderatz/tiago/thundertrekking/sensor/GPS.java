@@ -3,7 +3,6 @@ package org.thunderatz.tiago.thundertrekking.sensor;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.location.Criteria;
 import android.location.GpsStatus;
 import android.location.LocationListener;
@@ -12,13 +11,10 @@ import android.provider.Settings;
 
 import org.thunderatz.tiago.thundertrekking.Logger;
 
-public class GPS extends SensorThread {
-    SensorManager mSensorManager;
-    SensorEventListener activity;
-    public GPS(Logger l, int target_port, String my_id, Context context) {
-        super(l, target_port, my_id);
-        mSensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-        activity = (SensorEventListener) context;
+public class GPS extends SensorSocket {
+    public GPS(Logger logger, int target_port, String my_id, SensorEventListener sensorEventListener) {
+        super(logger, target_port, my_id);
+        Context context = (Context) sensorEventListener;
 
         LocationManager locationManager;
         locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
@@ -34,17 +30,11 @@ public class GPS extends SensorThread {
         criteria.setAccuracy(Criteria.ACCURACY_FINE);
         provider = locationManager.getBestProvider(criteria, false);
         if (provider != null) {
-            log("gps: provider " + provider + "\n");
-            locationManager.requestLocationUpdates(provider, 0, 0, (LocationListener) activity);
+            log("provider " + provider + "\n");
+            locationManager.requestLocationUpdates(provider, 0, 0, (LocationListener) sensorEventListener);
         } else
-            log("gps: sem gps\n");
+            log("sem gps\n");
     }
-
-    @Override
-    public boolean register() {return true;}
-
-    @Override
-    public void unregister() {}
 
     public void send(String nmea) {
         send((nmea + "\r\n").getBytes());

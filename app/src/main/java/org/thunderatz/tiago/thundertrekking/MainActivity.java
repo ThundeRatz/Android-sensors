@@ -45,6 +45,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
     };
 
     protected void listInterfaces() {
+        log.append("Interfaces:\n");
         try {
             Enumeration<NetworkInterface> enumNetworkInterfaces = NetworkInterface.getNetworkInterfaces();
             while (enumNetworkInterfaces.hasMoreElements()) {
@@ -80,9 +81,9 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
         listInterfaces();
         listSensors();
 
-        gps = new GPS(logger, 1414, "gps", this);
-        imu = new IMU(logger, 1415, "compass", this);
-        proximity = new Proximity(logger, 1416, "proximity", this);
+        gps = new GPS(logger, 44148, "gps", this);
+        imu = new IMU(logger, 44151, "compass", this);
+        proximity = new Proximity(logger, 44150, "proximity", this);
 
         PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         PowerManager.WakeLock wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Sensores");
@@ -91,9 +92,8 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 
     @Override
     protected void onDestroy() {
-        gps.unregister();
-        imu.unregister();
-        proximity.unregister();
+        super.onDestroy();
+        mSensorManager.unregisterListener(this);
     }
 
     @Override
@@ -120,6 +120,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
     @Override
     public void onLocationChanged(Location location) {}
 
+    @Override
     public void onNmeaReceived(long timestamp, String nmea){
         gps.send(nmea);
     }

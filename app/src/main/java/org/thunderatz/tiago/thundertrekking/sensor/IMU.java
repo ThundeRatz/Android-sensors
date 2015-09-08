@@ -11,20 +11,15 @@ import org.thunderatz.tiago.thundertrekking.Logger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-public class IMU extends SensorThread {
+public class IMU extends SensorSocket {
     private static final float LOW_PASS_ALPHA = 0.85f;
     private float[] gravity = new float[] {0.f, 0.f, 0.f};
-    SensorManager mSensorManager;
-    SensorEventListener activity;
 
     public IMU(Logger l, int target_port, String my_id, Context context) {
         super(l, target_port, my_id);
-        mSensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-        activity = (SensorEventListener) context;
-    }
+        SensorManager mSensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+        SensorEventListener activity = (SensorEventListener) context;
 
-    @Override
-    public boolean register() {
         // TYPE_ROTATION_VECTOR retorna rotação como mix do campo magnético e giroscópio
         // (usando campo magnético para leitura da rotação, mas calculando com giroscópio a rotação
         // entre as amostras do campo magnético e permitindo maior frequência de atualização que apenas
@@ -51,18 +46,8 @@ public class IMU extends SensorThread {
         else {
             logger.add("Sem TYPE_ACCELEROMETER\n");
             mSensorManager.unregisterListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD));
-            return false;
         }
         // Seria interessante ter um celular com TYPE_GRAVITY, TYPE_GYROSCOPE e TYPE_LINEAR_ACCELERATION
-        return true;
-    }
-
-    @Override
-    public void unregister() {
-        mSensorManager.unregisterListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD));
-        mSensorManager.unregisterListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR));
-        mSensorManager.unregisterListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR));
-        mSensorManager.unregisterListener(activity, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
     }
 
     public void send(SensorEvent event) {
@@ -90,7 +75,7 @@ public class IMU extends SensorThread {
                     buffer.putFloat(value);
                 }
                 send(buffer.array());
-                break;]
+                break;
             }
 
             case Sensor.TYPE_MAGNETIC_FIELD: {

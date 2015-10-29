@@ -11,9 +11,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public abstract class SensorSocket {
     private class TCPServer extends Thread {
@@ -28,21 +28,15 @@ public abstract class SensorSocket {
                 return;
             }
             while (true) {
-                Socket tcpSocket;
                 try {
                     tcpSocket = serverSocket.accept();
-                } catch (IOException e) {
-                    log(e.toString());
+                    tcpSocket.shutdownInput();
                     try {
-                        serverSocket.close();
-                    } catch (IOException closeException) {
-                        log(closeException.toString());
+                        tcpOutputStream = tcpSocket.getOutputStream();
+                    } catch (IOException e) {
+                        tcpSocket.close();
+                        log(e.toString());
                     }
-                    return;
-                }
-                try {
-                    OutputStream tcpOutputStream = tcpSocket.getOutputStream();
-                    new Thread(new ClientHandler(tcpOutputStream)).start();
                 } catch (IOException e) {
                     log(e.toString());
                 }
@@ -50,48 +44,16 @@ public abstract class SensorSocket {
         }
     }
 
-    private class ClientHandler extends Thread {
-        private final OutputStream outputStream;
-
-        ClientHandler(OutputStream outputStream) {
-            this.outputStream = outputStream;
-        }
-
-        @Override
-        public void run() {
-            super.run();
-
-            try {
-                while (true) {
-                    lock.lock();
-                    newPacketCondition.await();
-                    lock.unlock();
-                    outputStream.write(lastMessage);
-                }
-            } catch (InterruptedException | IOException e) {
-                log(e.toString());
-            } finally {
-                try {
-                    outputStream.close();
-                } catch (IOException e) {
-                    log(e.toString());
-                }
-                return;
-            }
-        }
-    }
-
-    protected final static byte[] ip = {(byte) 192, (byte) 168, (byte) 42, (byte) 136};
-    protected final static InetAddress clientAddress;
-    protected DatagramSocket udpSocket;
     protected Logger logger;
-    protected int clientPort = 0;
-    protected String id;
 
-    private final Lock lock = new ReentrantLock();
-    private final Condition newPacketCondition = lock.newCondition();
-    private byte[] lastMessage;
-    private TCPServer tcpServer;
+    private final static byte[] ip = {(byte) 192, (byte) 168, (byte) 42, (byte) 136};
+    private final static InetAddress clientAddress;
+    private int clientPort = 0;
+    private String id;
+    private DatagramSocket udpSocket;
+    private Socket tcpSocket;
+    private OutputStream tcpOutputStream = null;
+    private Lock dataOrderLock = new ReentrantLock();
 
     static {
         try {
@@ -120,19 +82,31 @@ public abstract class SensorSocket {
 
     protected void send(byte[] data) {
         final DatagramPacket packet = new DatagramPacket(data, data.length, clientAddress, clientPort);
-        /// @FIXME race condition
-        lastMessage = data;
-        lock.lock();
-        newPacketCondition.signalAll();
-        lock.unlock();
+        final byte[] packetData = data;
         Runnable sendTask = new Runnable() {
             @Override
             public void run() {
+                dataOrderLock.lock();
                 try {
                     udpSocket.send(packet);
                 } catch (IOException e) {
                     log(e.toString());
                 }
+                if (tcpOutputStream != null) {
+                    try {
+                        tcpOutputStream.write(packetData);
+                    } catch (IOException e) {
+                        log(e.toString());
+                        try {
+                            tcpOutputStream.close();
+                        } catch (IOException e1) {}
+                        try {
+                            tcpSocket.close();
+                        } catch (IOException e1) {}
+                        tcpOutputStream = null;
+                    }
+                }
+                dataOrderLock.unlock();
             }
         };
         new Thread(sendTask).start();
